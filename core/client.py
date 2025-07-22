@@ -1,6 +1,7 @@
 import asyncio
 import logging
-import argparse
+import struct
+import signal
 from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,11 @@ class ClientCore:
             return False
 
         try:
-            self.writer.write(message.encode())
+            # Length-prefix the message for easier server-side parsing
+            message_bytes = message.encode()
+            length = len(message_bytes)
+            self.writer.write(struct.pack("!I", length))
+            self.writer.write(message_bytes)
             await self.writer.drain()
             return True
         except Exception as e:
@@ -68,7 +73,7 @@ class ClientCore:
 
         self.connected = False
 
-    def close(self):
+    async def close(self):
         self.connected = False
 
         if self.receive_task:
@@ -76,39 +81,16 @@ class ClientCore:
 
         if self.writer and not self.writer.is_closing():
             self.writer.close()
+            await self.writer.wait_closed()
 
         logger.info("Connection closed.")
 
 
-async def cli_mode(host: str, port: int, alias: str):
-    def print_message(message: str):
-        print(f">> {message}")
+async def main():
+    import argparse
+    import sys
 
-    client = ClientCore(host, port, alias)
-    client.set_message_callback(print_message)
-
-    if not await client.connect():
-        print("Failed to connect to server.")
-        return
-
-    print(
-        f"Connected as '{alias}'. Type messages and press Enter. Type 'quit' to exit."
-    )
-
-    try:
-        while True:
-            message = input()
-            if message.lower() in ["quit", "exit"]:
-                break
-            await client.send_message(message)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        client.close()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Network Chat Client")
+    parser = argparse.ArgumentParser(description="Async TCP Client")
     parser.add_argument(
         "--host",
         type=str,
@@ -116,15 +98,47 @@ if __name__ == "__main__":
         help="Server host address (default: 127.0.0.1)",
     )
     parser.add_argument(
-        "--port", type=int, default=50000, help="Server port (default: 50000)"
+        "--port",
+        type=int,
+        default=50000,
+        help="Server port (default: 50000)",
     )
     parser.add_argument(
         "--alias",
         type=str,
         default="Anonymous",
-        help="Your chat alias (default: Anonymous)",
+        help="Client alias (default: Anonymous)",
     )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(cli_mode(args.host, args.port, args.alias))
+    client = ClientCore(host=args.host, port=args.port, alias=args.alias)
+
+    def signal_handler():
+        logger.info("Received interrupt signal")
+        asyncio.create_task(client.close())
+        sys.exit(0)
+
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGINT, signal_handler)
+    loop.add_signal_handler(signal.SIGTERM, signal_handler)
+
+    client.set_message_callback(lambda msg: print(f"Received: {msg}"))
+
+    if not await client.connect():
+        logger.error("Failed to connect to server")
+        return
+
+    try:
+        while client.connected:
+            message = await asyncio.to_thread(input, "Enter message: ")
+            if message.lower() in ["quit", "exit"]:
+                break
+            await client.send_message(message)
+    except (EOFError, KeyboardInterrupt):
+        pass
+    finally:
+        await client.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
