@@ -1,44 +1,96 @@
 # Network Communication Chat System
 
-A simple asynchronous TCP-based chat system implemented in Python using asyncio. The system consists of a server that can handle multiple concurrent clients and relay messages between them.
+A comprehensive asynchronous TCP-based chat system implemented in Python using asyncio. The system provides both command-line and GUI interfaces, with a modular architecture separating core networking functionality from user interfaces.
 
 ## Components
 
-### Server (`server.py`)
+### Core Module (`core/`)
 
-- Asynchronous TCP server that listens on configurable host/port (default: 127.0.0.1:50000)
+#### Server (`core/server.py`)
+- Asynchronous TCP server that listens on configurable host/port (default: 0.0.0.0:50000)
 - Handles multiple concurrent client connections
 - Implements message broadcasting with split-horizon (messages aren't echoed back to sender)
 - Client alias support through initial handshake protocol
 - Comprehensive logging for connection events and errors
 
-### Client (`client.py`)
-
-- Asynchronous TCP client with command-line argument support
-- Concurrent sending and receiving of messages
-- Configurable server connection (default: 127.0.0.1:50000)
+#### Client Core (`core/client.py`)
+- Modular client implementation with callback-based message handling
+- Asynchronous TCP client with connection management
+- Configurable server connection settings
 - User alias/nickname support
-- Graceful exit with "exit" or "quit" commands
+- Designed to be used by both CLI and GUI interfaces
+
+### GUI Interface (`gui/`)
+
+#### Main GUI Application (`gui/gui_client.py`)
+- PyQt5-based graphical user interface
+- Real-time chat window with message display
+- Connection dialog for server configuration
+- Asynchronous integration with qasync for seamless UI/network operations
+
+#### GUI Widgets (`gui/widgets/`)
+- **Chat Window** (`chat_window.py`): Main chat interface with message display and input
+- **Connect Dialog** (`connect_dialog.py`): Server connection configuration dialog
+
+## Installation
+
+Install the required dependencies:
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage
 
 ### Starting the Server
 
 ```bash
-python server.py --host <server_ip> --port <server_port>
+python -m core.server --host <server_ip> --port <server_port>
 ```
 
-### Connecting with Client
+### GUI Client
 
 ```bash
-python client.py --host <server_ip> --port <server_port> --name <your_alias>
+python -m gui.gui_client
+```
+
+The GUI will prompt you to connect to a server with host, port, and alias configuration.
+
+### Command Line Client
+
+```bash
+python -m core.client --host <server_ip> --port <server_port> --name <your_alias>
 ```
 
 Example:
 
 ```bash
-python client.py --host 127.0.0.1 --port 50000 --name "Alice"
+python -m core.client --host 127.0.0.1 --port 50000 --name "Alice"
 ```
+
+## Project Structure
+
+```
+network_comm/
+├── core/                   # Core networking functionality
+│   ├── client.py          # Modular client implementation
+│   └── server.py          # Server implementation
+├── gui/                   # GUI interface
+│   ├── __init__.py
+│   ├── gui_client.py      # Main GUI application
+│   └── widgets/           # GUI components
+│       ├── __init__.py
+│       ├── chat_window.py      # Chat interface widget
+│       └── connect_dialog.py   # Connection dialog
+├── requirements.txt       # Project dependencies
+├── README.md             # Project documentation
+└── .gitignore           # Git ignore rules
+```
+
+## Dependencies
+
+- **PyQt5**: GUI framework for the graphical interface
+- **qasync**: Asyncio integration with Qt event loop
 
 ## TODO / Potential Improvements
 
@@ -68,6 +120,10 @@ python client.py --host 127.0.0.1 --port 50000 --name "Alice"
 - [ ] Implement message timestamps
 - [ ] Add file transfer capabilities
 - [x] Announce new users joining/leaving the chat
+- [x] GUI interface with PyQt5
+- [ ] Message formatting (bold, italic, colors)
+- [ ] Emoji support in GUI
+- [ ] Sound notifications for new messages
 
 ### Configuration & Deployment
 
