@@ -2,9 +2,10 @@ import asyncio
 import logging
 import argparse
 import struct
-import sys
 import signal
+
 from typing import List
+from utils.io import read_message, MessageReadError
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -23,6 +24,7 @@ class Server:
         for writer in self.clients:
             if writer not in exclude:
                 try:
+                    writer.write(struct.pack("!I", len(message)))  # Send length first
                     writer.write(message)
                     await writer.drain()
                 except Exception as e:
@@ -35,22 +37,18 @@ class Server:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ):
         client_addr = writer.get_extra_info("peername")
-        handshake = await reader.readline()
-        alias = handshake.decode().split(":", 1)[-1].strip()
+        handshake = await read_message(reader)
+        alias = handshake.split(":", 1)[-1].strip()
         self.clients.add(writer)
         logger.info(f"[+] New connection: {client_addr} as '{alias}'.")
         await self.broadcast(
             f"[+] {alias} has joined the chat!".encode(), exclude=[writer]
         )
-
+        # TODO: Use a function for reading task
         try:
             while True:
-                length_bytes = await reader.readexactly(4)
-                if not length_bytes:
-                    break
-                length = struct.unpack("!I", length_bytes)[0]
-                data = await reader.readexactly(length)
-                message = data.decode()
+                # TODO: Better error handling and reconnection logic
+                message = await read_message(reader)
                 logger.debug(
                     f"Received message from {alias}, {client_addr}: {message}."
                 )

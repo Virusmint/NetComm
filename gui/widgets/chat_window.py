@@ -92,22 +92,22 @@ class ChatWindow(QWidget):
 
         # Status bar with disconnect button
         status_layout = QHBoxLayout()
-        
+
         self.status_label = QLabel("Disconnected")
         self.status_label.setStyleSheet(
             "color: #ff6b6b; font-weight: bold; background-color: #3c3c3c; border-radius: 5px; padding: 8px;"
         )
         status_layout.addWidget(self.status_label)
-        
+
         status_layout.addStretch()
-        
+
         self.disconnect_button = QPushButton("↵ Disconnect")
         self.disconnect_button.setObjectName("disconnect_button")
         self.disconnect_button.setToolTip("Disconnect and return to connect dialog")
         self.disconnect_button.clicked.connect(self.disconnect_requested.emit)
         self.disconnect_button.setEnabled(False)
         status_layout.addWidget(self.disconnect_button)
-        
+
         layout.addLayout(status_layout)
 
         self.chat_display = QTextEdit()
@@ -145,18 +145,20 @@ class ChatWindow(QWidget):
     def add_message(self, message: str):
         if self.is_system_message(message):
             # System messages with special color and bold, but left-aligned
-            self.chat_display.append(f'<p style="color: #87ceeb; font-weight: bold; padding: 10px; margin: 15px 0;">{message}</p>')
+            self.chat_display.append(
+                f'<p style="color: #87ceeb; font-weight: bold; padding: 10px; margin: 15px 0;">{message}</p>'
+            )
         else:
             # User messages use default styling
             self.chat_display.append(message)
-    
+
     def is_system_message(self, message: str):
         system_keywords = [
             "Connected to",
             "Disconnected from server",
             "joined the chat",
             "left the chat",
-            "has disconnected"
+            "has disconnected",
         ]
         return any(keyword in message for keyword in system_keywords)
 
@@ -182,4 +184,3 @@ class ChatWindow(QWidget):
         # Signal window is closing to handle cleanup without showing dialog
         self.window_closing.emit()
         event.accept()
-
