@@ -1,11 +1,10 @@
 import asyncio
 import logging
-import argparse
 import struct
 import signal
 
 from typing import List
-from utils.io import read_message, MessageReadError
+from utils.io import read_message, ConnectionCloseError
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -20,7 +19,8 @@ class Server:
         self.server = None
         self.clients = set()
 
-    async def broadcast(self, message: bytes, exclude: List[asyncio.StreamWriter] = []):
+    async def broadcast(self, message: str, exclude: List[asyncio.StreamWriter] = []):
+        message = message.encode()
         for writer in self.clients:
             if writer not in exclude:
                 try:
@@ -41,26 +41,23 @@ class Server:
         alias = handshake.split(":", 1)[-1].strip()
         self.clients.add(writer)
         logger.info(f"[+] New connection: {client_addr} as '{alias}'.")
-        await self.broadcast(
-            f"[+] {alias} has joined the chat!".encode(), exclude=[writer]
-        )
-        # TODO: Use a function for reading task
+        await self.broadcast(f"[+] {alias} has joined the chat!", exclude=[writer])
         try:
             while True:
-                # TODO: Better error handling and reconnection logic
                 message = await read_message(reader)
                 logger.debug(
                     f"Received message from {alias}, {client_addr}: {message}."
                 )
-                await self.broadcast(f"{alias}: {message}".encode(), exclude=[writer])
-        except Exception as e:
-            logger.error(f"Error handling client {client_addr}: {e}")
+                await self.broadcast(f"{alias}: {message}", exclude=[writer])
+        # TODO: Better error handling and reconnection logic
+        except ConnectionCloseError:
+            pass
         finally:
             self.clients.discard(writer)
             writer.close()
             await writer.wait_closed()
             logger.info(f"[-] Closed connection: {client_addr} as {alias}.")
-            await self.broadcast(f"[-] {alias} has left the chat.".encode())
+            await self.broadcast(f"[-] {alias} has left the chat.")
 
     async def start(self):
         self.server = await asyncio.start_server(
@@ -76,15 +73,21 @@ class Server:
         logger.info("Stopping server...")
         if self.server:
             self.server.close()
+            self.server.close_clients()
             await self.server.wait_closed()
-        for writer in list(self.clients):
-            writer.close()
-            await writer.wait_closed()
-        self.clients.clear()
         logger.info("Server stopped gracefully.")
 
 
-async def main():
+async def main_coro():
+    try:
+        await server.start()
+    except asyncio.CancelledError:
+        await server.stop()
+
+
+if __name__ == "__main__":
+    import argparse
+
     parser = argparse.ArgumentParser(description="Async TCP Server")
     parser.add_argument(
         "--host",
@@ -99,22 +102,15 @@ async def main():
         help="Port to bind the server (default: 50000)",
     )
     args = parser.parse_args()
-
     server = Server(host=args.host, port=args.port)
 
-    def signal_handler():
-        logger.info("Received interrupt signal")
-        asyncio.create_task(server.stop())
-
-    loop = asyncio.get_running_loop()
-    loop.add_signal_handler(signal.SIGINT, signal_handler)
-    loop.add_signal_handler(signal.SIGTERM, signal_handler)
-
+    # https://stackoverflow.com/questions/48562893/how-to-gracefully-terminate-an-asyncio-script-with-ctrl-c
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    main_task = asyncio.ensure_future(main_coro())
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, main_task.cancel)
     try:
-        await server.start()
-    except asyncio.CancelledError:
-        pass
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        loop.run_until_complete(main_task)
+    finally:
+        loop.close()
