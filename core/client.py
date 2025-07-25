@@ -1,91 +1,102 @@
 import asyncio
 import logging
-import struct
 import signal
-from typing import Optional, Callable
+import sys
+from typing import Optional, Callable, Literal
 
-from utils.io import read_message, MessageReadError
+from utils.io import write_message, read_message, ConnectionCloseError
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
 
-class ClientCore:
+class Client:
     def __init__(self, host="10.0.0.25", port=50000, alias="Anonymous"):
         self.host = host
         self.port = port
         self.alias = alias
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
+        self.send_task: Optional[asyncio.Task] = None
         self.receive_task: Optional[asyncio.Task] = None
         self.message_callback: Optional[Callable[[str], None]] = None
-        # TODO: Get rid of this damn connected flag
-        self.connected = False
 
     def set_message_callback(self, callback: Callable[[str], None]):
         self.message_callback = callback
 
-    async def connect(self) -> bool:
-        try:
-            self.reader, self.writer = await asyncio.open_connection(
-                self.host, self.port
-            )
-            self.connected = True
-            await self.send_message(f"__alias__:{self.alias}")
-            self.receive_task = asyncio.create_task(self.receive_messages())
-            return True
-        except ConnectionRefusedError:
-            logger.error(f"Connection to {self.host}:{self.port} refused.")
-        except Exception as e:
-            logger.error(f"Failed to connect to {self.host}:{self.port}: {e}")
-        return False
+    async def connect(self):
+        self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
+        await self.send_message(f"__alias__:{self.alias}")
 
-    async def send_message(self, message: str) -> bool:
-        if not self.connected or not self.writer:
-            return False
-        try:
-            message_bytes = message.encode()
-            length = len(message_bytes)
-            self.writer.write(struct.pack("!I", length))
-            self.writer.write(message_bytes)
-            await self.writer.drain()
-            return True
-        except Exception as e:
-            logger.error(f"Failed to send message: {e}")
-            return False
+    async def send_message(self, message: str):
+        await write_message(self.writer, message)
 
     async def receive_messages(self):
-        # TODO: Better error handling and reconnection logic
-        while self.connected and not self.reader.at_eof():
+        while True:
             try:
-                header = await self.reader.readexactly(4)
-                if not header:
-                    break
-                length_data = struct.unpack("!I", header)[0]
-                data = await self.reader.readexactly(length_data)
-                message = data.decode()
+                message = await read_message(self.reader)
                 if self.message_callback:
                     self.message_callback(message)
-            except Exception as e:
-                logger.error(f"Error receiving message: {e}")
+            except asyncio.CancelledError:
                 break
-        self.connected = False
+
+    async def send_messages_cli(self):
+        stdin_reader = asyncio.StreamReader()
+        protocol = asyncio.StreamReaderProtocol(stdin_reader)
+        loop = asyncio.get_event_loop()
+        await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+
+        print("> ", end="", flush=True)
+        while True:
+            try:
+                line = await stdin_reader.readline()
+                if not line:  # EOF
+                    break
+                message = line.decode().strip()
+                if message.lower() in ("exit", "quit"):
+                    await self.stop()
+                await self.send_message(message)
+                print("> ", end="", flush=True)
+            except asyncio.CancelledError:
+                break
+
+    async def start(self, mode: Literal["cli", "gui"]):
+        await self.connect()
+        if mode == "cli":
+            self.receive_task = asyncio.create_task(self.receive_messages())
+            self.send_task = asyncio.create_task(self.send_messages_cli())
+            await asyncio.gather(
+                self.receive_task, self.send_task, return_exceptions=True
+            )
+        else:
+            await self.receive_messages()
 
     async def stop(self):
         logger.info("Stopping client...")
-        self.connected = False
         if self.receive_task:
             self.receive_task.cancel()
+        if self.send_task:
+            self.send_task.cancel()
+        self.writer.close()
+        await self.writer.wait_closed()
+        logger.info("Client stopped.")
 
-        if self.writer and not self.writer.is_closing():
-            self.writer.close()
-            await self.writer.wait_closed()
-        logger.info("Connection closed.")
+
+def _cli_message_callback(message: str):
+    print(f"\n{message}")
+    sys.stdout.write("> ")
+    sys.stdout.flush()
 
 
-async def main():
+async def main_coro(mode):
+    try:
+        await client.start(mode)
+    except asyncio.CancelledError:
+        await client.stop()
+
+
+if __name__ == "__main__":
     import argparse
-    import sys
 
     parser = argparse.ArgumentParser(description="Async TCP Client")
     parser.add_argument(
@@ -106,35 +117,17 @@ async def main():
         default="Anonymous",
         help="Client alias (default: Anonymous)",
     )
+
     args = parser.parse_args()
+    client = Client(host=args.host, port=args.port, alias=args.alias)
+    client.set_message_callback(_cli_message_callback)
 
-    client = ClientCore(host=args.host, port=args.port, alias=args.alias)
-
-    # TODO: Fix this damn signal handling
-    def signal_handler():
-        logger.info("Received interrupt signal")
-        asyncio.create_task(client.stop())
-
-    loop = asyncio.get_running_loop()
-    loop.add_signal_handler(signal.SIGINT, signal_handler)
-    loop.add_signal_handler(signal.SIGTERM, signal_handler)
-
-    client.set_message_callback(lambda msg: print(f"Received: {msg}"))
-
-    if not await client.connect():
-        logger.error("Failed to connect to server")
-        return
-
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    main_task = asyncio.ensure_future(main_coro(mode="cli"))
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, main_task.cancel)
     try:
-        while client.connected:
-            message = await asyncio.to_thread(input, "Enter message: ")
-            if message.lower() in ["quit", "exit"]:
-                await client.stop()
-                break
-            await client.send_message(message)
-    except asyncio.CancelledError:
-        pass
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        loop.run_until_complete(main_task)
+    finally:
+        loop.close()
