@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class Client:
-    def __init__(self, host="10.0.0.25", port=50000, alias="Anonymous"):
+    def __init__(self, host="127.0.0.1", port=50000, alias="Anonymous"):
         self.host = host
         self.port = port
         self.alias = alias
@@ -37,7 +37,7 @@ class Client:
                 message = await read_message(self.reader)
                 if self.message_callback:
                     self.message_callback(message)
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, ConnectionCloseError):
                 break
 
     async def send_messages_cli(self):
@@ -45,9 +45,8 @@ class Client:
         protocol = asyncio.StreamReaderProtocol(stdin_reader)
         loop = asyncio.get_event_loop()
         await loop.connect_read_pipe(lambda: protocol, sys.stdin)
-
-        print("> ", end="", flush=True)
         while True:
+            print("> ", end="", flush=True)
             try:
                 line = await stdin_reader.readline()
                 if not line:  # EOF
@@ -55,8 +54,8 @@ class Client:
                 message = line.decode().strip()
                 if message.lower() in ("exit", "quit"):
                     await self.stop()
+                    break
                 await self.send_message(message)
-                print("> ", end="", flush=True)
             except asyncio.CancelledError:
                 break
 
@@ -77,13 +76,16 @@ class Client:
             self.receive_task.cancel()
         if self.send_task:
             self.send_task.cancel()
-        self.writer.close()
-        await self.writer.wait_closed()
+        if self.writer:
+            self.writer.close()
+            await self.writer.wait_closed()
         logger.info("Client stopped.")
 
 
+# TODO: buffer messages in CLI mode to avoid losing messages
 def _cli_message_callback(message: str):
-    print(f"\n{message}")
+    sys.stdout.write("\r\033[K")
+    sys.stdout.write(f"{message}\n")
     sys.stdout.write("> ")
     sys.stdout.flush()
 
