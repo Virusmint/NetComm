@@ -6,10 +6,10 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import QObject, pyqtSignal, QThread, QTimer
 import qasync
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from core.client import ClientCore
-from widgets.chat_window import ChatWindow
-from widgets.connect_dialog import ConnectDialog
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+from networking.client import Client
+from .widgets.chat_window import ChatWindow
+from .widgets.connect_dialog import ConnectDialog
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -49,36 +49,33 @@ class ChatApplication(QObject):
         )
 
     async def connect_to_server(self, host: str, port: int, alias: str):
-        self.client = ClientCore(host, port, alias)
+        self.client = Client(host, port, alias)
         self.client.set_message_callback(self.on_message_received)
 
         try:
-            if await self.client.connect():
-                self.connection_status.emit(True)
-                self.chat_window.add_message(f"Connected to {host}:{port} as {alias}")
-            else:
-                self.connection_status.emit(False)
-                QMessageBox.critical(
-                    self.chat_window,
-                    "Connection Error",
-                    f"Failed to connect to {host}:{port}",
-                )
-                self.show_connect_dialog()
+            await self.client.connect()
+            self.connection_status.emit(True)
+            self.chat_window.add_message(f"Connected to {host}:{port} as {alias}")
+            # Start listening for messages
+            asyncio.create_task(self.listen_for_messages())
         except Exception as e:
             logger.error(f"Connection error: {e}")
+            self.connection_status.emit(False)
             QMessageBox.critical(self.chat_window, "Connection Error", str(e))
+            self.show_connect_dialog()
 
     def on_message_received(self, message: str):
         self.message_received.emit(message)
 
     async def send_message(self, message: str):
-        if self.client and self.client.connected:
+        if self.client and self.client.writer:
             self.chat_window.add_message(f"You: {message}")
             await self.client.send_message(message)
 
     def disconnect(self, show_dialog=True):
-        if self.client:
-            self.client.close()
+        if self.client and self.client.writer:
+            self.client.writer.close()
+            self.client = None
             self.connection_status.emit(False)
             self.chat_window.add_message("Disconnected from server")
             if show_dialog:
@@ -86,10 +83,20 @@ class ChatApplication(QObject):
 
     def handle_window_close(self):
         # Handle window close without showing reconnect dialog
-        if self.client:
-            self.client.close()
+        if self.client and self.client.writer:
+            self.client.writer.close()
         # Exit the application
         QApplication.quit()
+
+    async def listen_for_messages(self):
+        """Continuously listen for incoming messages"""
+        try:
+            while self.client and self.client.reader:
+                await self.client.receive_message()
+        except Exception as e:
+            logger.error(f"Error receiving message: {e}")
+            self.connection_status.emit(False)
+            self.chat_window.add_message("Connection lost")
 
 
 if __name__ == "__main__":
@@ -100,8 +107,8 @@ if __name__ == "__main__":
     chat_app = ChatApplication()
 
     def cleanup():
-        if chat_app.client:
-            chat_app.client.close()
+        if chat_app.client and chat_app.client.writer:
+            chat_app.client.writer.close()
 
     app.aboutToQuit.connect(cleanup)
 
