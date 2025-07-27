@@ -1,5 +1,6 @@
 import asyncio
 from typing import Optional, Callable
+import ssl
 
 from .protocol.io import write_message, read_message
 
@@ -17,7 +18,12 @@ class Client:
         self.message_callback = callback
 
     async def connect(self):
-        self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False  # For local IPs
+        ssl_context.verify_mode = ssl.CERT_NONE  # Skip certificate verification
+        self.reader, self.writer = await asyncio.open_connection(
+            self.host, self.port, ssl=ssl_context
+        )
         await self.send_message(f"__alias__:{self.alias}")
 
     async def send_message(self, message: str):

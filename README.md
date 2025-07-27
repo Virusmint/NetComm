@@ -4,31 +4,43 @@ A comprehensive asynchronous TCP-based chat system implemented in Python using a
 
 ## Components
 
-### Core Module (`core/`)
+### Networking Module (`src/networking/`)
 
-#### Server (`core/server.py`)
+#### Server (`src/networking/server.py`)
+
 - Asynchronous TCP server that listens on configurable host/port (default: 0.0.0.0:50000)
 - Handles multiple concurrent client connections
 - Implements message broadcasting with split-horizon (messages aren't echoed back to sender)
 - Client alias support through initial handshake protocol
 - Comprehensive logging for connection events and errors
 
-#### Client Core (`core/client.py`)
+#### Client Core (`src/networking/client.py`)
+
 - Modular client implementation with callback-based message handling
 - Asynchronous TCP client with connection management
 - Configurable server connection settings
 - User alias/nickname support
 - Designed to be used by both CLI and GUI interfaces
 
-### GUI Interface (`gui/`)
+#### Protocol (`src/networking/protocol/`)
 
-#### Main GUI Application (`gui/gui_client.py`)
-- PyQt5-based graphical user interface
+- **I/O Module** (`io.py`): Message reading and writing utilities for network communication
+
+### User Interfaces (`src/interfaces/`)
+
+#### CLI Interface (`src/interfaces/cli/`)
+
+- **CLI Client** (`client_cli.py`): Command-line interface for the chat client
+
+#### GUI Interface (`src/interfaces/gui/`)
+
+- **Main GUI Application** (`client_gui.py`): PyQt5-based graphical user interface
 - Real-time chat window with message display
 - Connection dialog for server configuration
 - Asynchronous integration with qasync for seamless UI/network operations
 
-#### GUI Widgets (`gui/widgets/`)
+#### GUI Widgets (`src/interfaces/gui/widgets/`)
+
 - **Chat Window** (`chat_window.py`): Main chat interface with message display and input
 - **Connect Dialog** (`connect_dialog.py`): Server connection configuration dialog
 
@@ -45,13 +57,13 @@ pip install -r requirements.txt
 ### Starting the Server
 
 ```bash
-python -m core.server --host <server_ip> --port <server_port>
+python -m src.networking.server --host <server_ip> --port <server_port>
 ```
 
 ### GUI Client
 
 ```bash
-python -m gui.gui_client
+python -m src.interfaces.gui.client_gui
 ```
 
 The GUI will prompt you to connect to a server with host, port, and alias configuration.
@@ -59,32 +71,42 @@ The GUI will prompt you to connect to a server with host, port, and alias config
 ### Command Line Client
 
 ```bash
-python -m core.client --host <server_ip> --port <server_port> --name <your_alias>
+python -m src.interfaces.cli.client_cli --host <server_ip> --port <server_port> --name <your_alias>
 ```
 
 Example:
 
 ```bash
-python -m core.client --host 127.0.0.1 --port 50000 --name "Alice"
+python -m src.interfaces.cli.client_cli --host 127.0.0.1 --port 50000 --name "Alice"
 ```
 
 ## Project Structure
 
 ```
 network_comm/
-├── core/                   # Core networking functionality
-│   ├── client.py          # Modular client implementation
-│   └── server.py          # Server implementation
-├── gui/                   # GUI interface
+├── src/
 │   ├── __init__.py
-│   ├── gui_client.py      # Main GUI application
-│   └── widgets/           # GUI components
+│   ├── interfaces/
+│   │   ├── __init__.py
+│   │   ├── cli/
+│   │   │   ├── __init__.py
+│   │   │   └── client_cli.py
+│   │   └── gui/
+│   │       ├── __init__.py
+│   │       ├── client_gui.py
+│   │       └── widgets/
+│   │           ├── __init__.py
+│   │           ├── chat_window.py
+│   │           └── connect_dialog.py
+│   └── networking/
 │       ├── __init__.py
-│       ├── chat_window.py      # Chat interface widget
-│       └── connect_dialog.py   # Connection dialog
-├── requirements.txt       # Project dependencies
-├── README.md             # Project documentation
-└── .gitignore           # Git ignore rules
+│       ├── client.py
+│       ├── server.py
+│       └── protocol/
+│           ├── __init__.py
+│           └── io.py
+├── requirements.txt
+└── README.md
 ```
 
 ## Dependencies
@@ -104,10 +126,10 @@ network_comm/
 
 ### Error Handling & Reliability
 
-- [ ] Improve graceful handling of client disconnections
+- [x] Improve graceful handling of client disconnections
 - [ ] Add connection timeout handling
 - [ ] Implement automatic reconnection logic in client
-- [ ] Add server shutdown signal handling (SIGTERM, SIGINT)
+- [x] Add server shutdown signal handling (SIGTERM, SIGINT)
 - [ ] Better error recovery for network interruptions
 
 ### Features

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import struct
 import signal
+import ssl
 
 from typing import List
 from .protocol.io import read_message, ConnectionCloseError
@@ -60,12 +61,16 @@ class Server:
             await self.broadcast(f"[-] {alias} has left the chat.")
 
     async def start(self):
+        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_context.load_cert_chain("server.crt", "server.key")
+
         self.server = await asyncio.start_server(
             self.handle_client,
             self.host,
             self.port,
+            ssl=ssl_context,
         )
-        logger.info(f"Server started on {self.host}:{self.port}.")
+        logger.info(f"TLS Server started on {self.host}:{self.port}.")
         async with self.server:
             await self.server.serve_forever()
 
