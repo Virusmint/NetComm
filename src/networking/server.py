@@ -4,7 +4,7 @@ import struct
 import signal
 
 from typing import List
-from utils.io import read_message, ConnectionCloseError
+from .protocol.io import read_message, ConnectionCloseError
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -50,7 +50,7 @@ class Server:
                 )
                 await self.broadcast(f"{alias}: {message}", exclude=[writer])
         # TODO: Better error handling and reconnection logic
-        except ConnectionCloseError:
+        except (asyncio.IncompleteReadError, ConnectionCloseError):
             pass
         finally:
             self.clients.discard(writer)
