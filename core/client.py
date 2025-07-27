@@ -4,6 +4,8 @@ import signal
 import sys
 from typing import Optional, Callable, Literal
 
+from prompt_toolkit.patch_stdout import patch_stdout
+from prompt_toolkit.shortcuts import PromptSession
 from utils.io import write_message, read_message, ConnectionCloseError
 
 logger = logging.getLogger(__name__)
@@ -41,23 +43,20 @@ class Client:
                 break
 
     async def send_messages_cli(self):
-        stdin_reader = asyncio.StreamReader()
-        protocol = asyncio.StreamReaderProtocol(stdin_reader)
-        loop = asyncio.get_event_loop()
-        await loop.connect_read_pipe(lambda: protocol, sys.stdin)
-        while True:
-            print("> ", end="", flush=True)
-            try:
-                line = await stdin_reader.readline()
-                if not line:  # EOF
-                    break
-                message = line.decode().strip()
-                if message.lower() in ("exit", "quit"):
+        session = PromptSession()
+        with patch_stdout():
+            while True:
+                try:
+                    message = await session.prompt_async("> ")
+                    if message.lower() in ("exit", "quit"):
+                        await self.stop()
+                        break
+                    await self.send_message(message)
+                except (EOFError, KeyboardInterrupt):
                     await self.stop()
                     break
-                await self.send_message(message)
-            except asyncio.CancelledError:
-                break
+                except asyncio.CancelledError:
+                    break
 
     async def start(self, mode: Literal["cli", "gui"]):
         await self.connect()
@@ -82,11 +81,8 @@ class Client:
         logger.info("Client stopped.")
 
 
-# TODO: buffer messages in CLI mode to avoid losing messages
 def _cli_message_callback(message: str):
-    sys.stdout.write("\r\033[K")
-    sys.stdout.write(f"{message}\n")
-    sys.stdout.write("> ")
+    print(f"\r{message}")
     sys.stdout.flush()
 
 
