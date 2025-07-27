@@ -2,47 +2,6 @@
 
 A comprehensive asynchronous TCP-based chat system implemented in Python using asyncio. The system provides both command-line and GUI interfaces, with a modular architecture separating core networking functionality from user interfaces.
 
-## Components
-
-### Networking Module (`src/networking/`)
-
-#### Server (`src/networking/server.py`)
-
-- Asynchronous TCP server that listens on configurable host/port (default: 0.0.0.0:50000)
-- Handles multiple concurrent client connections
-- Implements message broadcasting with split-horizon (messages aren't echoed back to sender)
-- Client alias support through initial handshake protocol
-- Comprehensive logging for connection events and errors
-
-#### Client Core (`src/networking/client.py`)
-
-- Modular client implementation with callback-based message handling
-- Asynchronous TCP client with connection management
-- Configurable server connection settings
-- User alias/nickname support
-- Designed to be used by both CLI and GUI interfaces
-
-#### Protocol (`src/networking/protocol/`)
-
-- **I/O Module** (`io.py`): Message reading and writing utilities for network communication
-
-### User Interfaces (`src/interfaces/`)
-
-#### CLI Interface (`src/interfaces/cli/`)
-
-- **CLI Client** (`client_cli.py`): Command-line interface for the chat client
-
-#### GUI Interface (`src/interfaces/gui/`)
-
-- **Main GUI Application** (`client_gui.py`): PyQt5-based graphical user interface
-- Real-time chat window with message display
-- Connection dialog for server configuration
-- Asynchronous integration with qasync for seamless UI/network operations
-
-#### GUI Widgets (`src/interfaces/gui/widgets/`)
-
-- **Chat Window** (`chat_window.py`): Main chat interface with message display and input
-- **Connect Dialog** (`connect_dialog.py`): Server connection configuration dialog
 
 ## Installation
 
@@ -52,13 +11,41 @@ Install the required dependencies:
 pip install -r requirements.txt
 ```
 
+## TLS/SSL Setup
+
+The system supports TLS encryption for secure communication. To enable TLS:
+
+### Generate SSL Certificates
+
+Create a self-signed certificate for testing:
+
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes
+```
+
+For production, use certificates from a trusted Certificate Authority.
+
+### Certificate Files
+
+Place your certificate files in the project directory:
+- `server.crt` - SSL certificate
+- `server.key` - Private key
+
 ## Usage
 
 ### Starting the Server
 
+#### Without TLS (default):
 ```bash
 python -m src.networking.server --host <server_ip> --port <server_port>
 ```
+
+#### With TLS encryption:
+```bash
+python -m src.networking.server --host <server_ip> --port <server_port> --tls
+```
+
+The server will automatically use `server.crt` and `server.key` files when TLS is enabled.
 
 ### GUI Client
 
@@ -70,14 +57,19 @@ The GUI will prompt you to connect to a server with host, port, and alias config
 
 ### Command Line Client
 
+#### Without TLS:
 ```bash
 python -m src.interfaces.cli.client_cli --host <server_ip> --port <server_port> --name <your_alias>
 ```
 
-Example:
-
+#### With TLS:
 ```bash
-python -m src.interfaces.cli.client_cli --host 127.0.0.1 --port 50000 --name "Alice"
+python -m src.interfaces.cli.client_cli --host <server_ip> --port <server_port> --name <your_alias> --tls
+```
+
+Example:
+```bash
+python -m src.interfaces.cli.client_cli --host 127.0.0.1 --port 50000 --name "Alice" --tls
 ```
 
 ## Project Structure
@@ -121,7 +113,7 @@ network_comm/
 - [ ] Add input validation and sanitization for messages and aliases
 - [ ] Implement authentication/authorization system
 - [ ] Add rate limiting to prevent message flooding
-- [ ] Implement proper SSL/TLS encryption for secure communication
+- [x] Implement proper SSL/TLS encryption for secure communication
 - [ ] Add message size limits to prevent buffer overflow attacks
 
 ### Error Handling & Reliability
