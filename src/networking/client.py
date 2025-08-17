@@ -30,16 +30,10 @@ class Client:
         await self.send_message(f"__alias__:{self.alias}")
 
     async def send_message(self, message: str):
-        # TODO: Error handling for connection issues
-        if self.writer.is_closing():
-            raise ConnectionError("Connection is closed")
         await write_message(self.writer, message)
 
     async def receive_message(self):
-        try:
-            message = await read_message(self.reader)
-        except asyncio.IncompleteReadError:
-            raise ConnectionError("Connection closed")
+        message = await read_message(self.reader)
         if self.message_callback:
             self.message_callback(message)
         return message
