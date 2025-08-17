@@ -1,163 +1,74 @@
-# Network Communication Chat System
+# NetComm: A Python Chat System
 
-A comprehensive asynchronous TCP-based chat system implemented in Python using asyncio. The system provides both command-line and GUI interfaces, with a modular architecture separating core networking functionality from user interfaces.
+NetComm is a TCP-based chat system built with Python's `asyncio` library. It offers both a command-line interface (CLI) and a graphical user interface (GUI), designed with a modular architecture that separates the networking logic from the user interface. Some features include:
 
+- **Asynchronous:** Built with `asyncio` for high performance and scalability.
+- **CLI and GUI:** Choose between a simple command-line client or a user-friendly GUI.
+- **Secure:** Supports TLS encryption for secure communication.
+- **Modular Design:** Core networking, CLI, and GUI components are separated for maintainability.
 
-## Installation
+## Getting Started
 
-Install the required dependencies:
+### Installation
 
-```bash
-pip install -r requirements.txt
-```
+1. Clone the repository:
 
-## TLS/SSL Setup
+   ```bash
+   git clone https://github.com/virusmint/NetComm.git
+   cd NetComm
+   ```
 
-The system supports TLS encryption for secure communication. To enable TLS:
+2. Install the project with the desired extras (e.g., `gui`, `cli`):
 
-### Generate SSL Certificates
+   ```bash
+   pip install .[gui,cli]
+   ```
 
-Create a self-signed certificate for testing:
+### Usage
 
-```bash
-openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes
-```
+#### Server
 
-For production, use certificates from a trusted Certificate Authority.
-
-### Certificate Files
-
-Place your certificate files in the project directory:
-- `server.crt` - SSL certificate
-- `server.key` - Private key
-
-## Usage
-
-### Starting the Server
-
-#### Without TLS (default):
-```bash
-python -m src.networking.server --host <server_ip> --port <server_port>
-```
-
-#### With TLS encryption:
-```bash
-python -m src.networking.server --host <server_ip> --port <server_port> --tls
-```
-
-The server will automatically use `server.crt` and `server.key` files when TLS is enabled.
-
-### GUI Client
+To start the chat server, run the following command:
 
 ```bash
-python -m src.interfaces.gui.client_gui
+netcomm-server [options]
 ```
 
-The GUI will prompt you to connect to a server with host, port, and alias configuration.
+**Options:**
 
-### Command Line Client
+- `--host`: The host address to bind the server to (default: `0.0.0.0`).
+- `--port`: The port to bind the server to (default: `50000`).
+- `--tls`: Enable TLS encryption.
 
-#### Without TLS:
+#### Client CLI
+
+To use the CLI client, run:
+
 ```bash
-python -m src.interfaces.cli.client_cli --host <server_ip> --port <server_port> --name <your_alias>
+netcomm-cli [options]
 ```
 
-#### With TLS:
+**Options:**
+
+- `--host`: The server host address (default: `127.0.0.1`).
+- `--port`: The server port (default: `50000`).
+- `--alias`: Your alias in the chat (default: `Anonymous`).
+- `--tls`: Enable TLS encryption.
+
+#### Client GUI
+
+To launch the GUI client, run:
+
 ```bash
-python -m src.interfaces.cli.client_cli --host <server_ip> --port <server_port> --name <your_alias> --tls
+netcomm-gui
 ```
 
-Example:
-```bash
-python -m src.interfaces.cli.client_cli --host 127.0.0.1 --port 50000 --name "Alice" --tls
-```
+The GUI will open a dialog to enter the server host, port, and alias. You can also enable TLS encryption by checking the "Use TLS" box.
 
-## Project Structure
+## Contributing
 
-```
-network_comm/
-├── src/
-│   ├── __init__.py
-│   ├── interfaces/
-│   │   ├── __init__.py
-│   │   ├── cli/
-│   │   │   ├── __init__.py
-│   │   │   └── client_cli.py
-│   │   └── gui/
-│   │       ├── __init__.py
-│   │       ├── client_gui.py
-│   │       └── widgets/
-│   │           ├── __init__.py
-│   │           ├── chat_window.py
-│   │           └── connect_dialog.py
-│   └── networking/
-│       ├── __init__.py
-│       ├── client.py
-│       ├── server.py
-│       └── protocol/
-│           ├── __init__.py
-│           └── io.py
-├── requirements.txt
-└── README.md
-```
+Contributions are welcome! If you have any suggestions, bug reports, or feature requests, please open an issue or submit a pull request.
 
-## Dependencies
+## License
 
-- **PyQt5**: GUI framework for the graphical interface
-- **qasync**: Asyncio integration with Qt event loop
-
-## TODO / Potential Improvements
-
-### Security & Robustness
-
-- [ ] Add input validation and sanitization for messages and aliases
-- [ ] Implement authentication/authorization system
-- [ ] Add rate limiting to prevent message flooding
-- [x] Implement proper SSL/TLS encryption for secure communication
-- [ ] Add message size limits to prevent buffer overflow attacks
-
-### Error Handling & Reliability
-
-- [x] Improve graceful handling of client disconnections
-- [ ] Add connection timeout handling
-- [ ] Implement automatic reconnection logic in client
-- [x] Add server shutdown signal handling (SIGTERM, SIGINT)
-- [ ] Better error recovery for network interruptions
-
-### Features
-
-- [ ] Add private messaging capabilities
-- [ ] Implement chat rooms/channels
-- [ ] Add message history/logging
-- [ ] Support for file transfers
-- [ ] Add user list/who's online functionality
-- [ ] Implement message timestamps
-- [ ] Add file transfer capabilities
-- [x] Announce new users joining/leaving the chat
-- [x] GUI interface with PyQt5
-- [ ] Message formatting (bold, italic, colors)
-- [ ] Emoji support in GUI
-- [ ] Sound notifications for new messages
-
-### Configuration & Deployment
-
-- [ ] Add configuration file support (JSON/YAML)
-- [ ] Environment variable configuration
-- [ ] Docker containerization
-- [ ] Add proper packaging with setup.py/pyproject.toml
-- [ ] Unit and integration tests
-
-### Code Quality
-
-- [ ] Add type hints throughout the codebase
-- [ ] Implement proper exception classes
-- [ ] Add docstrings to all methods and classes
-- [x] Code linting and formatting (black, flake8, mypy)
-- [ ] Performance profiling and optimization
-
-### Protocol Improvements
-
-- [ ] Design proper message protocol with headers
-- [ ] Add message acknowledgments
-- [ ] Implement keep-alive/heartbeat mechanism
-- [ ] Support for different message types (text, system, private)
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

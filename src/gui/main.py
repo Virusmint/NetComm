@@ -41,13 +41,16 @@ class ChatApplication(QObject):
         dialog.connect_requested.connect(self.handle_connect_request)
         dialog.exec_()
 
-    def handle_connect_request(self, host: str, port: int, alias: str):
+    def handle_connect_request(self, host: str, port: int, alias: str, tls: bool):
         QTimer.singleShot(
-            0, lambda: asyncio.ensure_future(self.connect_to_server(host, port, alias))
+            0,
+            lambda: asyncio.ensure_future(
+                self.connect_to_server(host, port, alias, tls)
+            ),
         )
 
-    async def connect_to_server(self, host: str, port: int, alias: str):
-        self.client = Client(host, port, alias)
+    async def connect_to_server(self, host: str, port: int, alias: str, tls: bool):
+        self.client = Client(host, port, alias, tls=tls)
         self.client.set_message_callback(self.on_message_received)
 
         try:
@@ -94,7 +97,6 @@ class ChatApplication(QObject):
 
 
 def main():
-    # FIX: Add TLS support
     app = QApplication(sys.argv)
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)

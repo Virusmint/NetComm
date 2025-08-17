@@ -6,12 +6,13 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QFormLayout,
+    QCheckBox,
 )
 from PyQt5.QtCore import pyqtSignal
 
 
 class ConnectDialog(QDialog):
-    connect_requested = pyqtSignal(str, int, str)
+    connect_requested = pyqtSignal(str, int, str, bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -76,6 +77,9 @@ class ConnectDialog(QDialog):
         self.alias_input = QLineEdit("Anonymous")
         form_layout.addRow("Alias:", self.alias_input)
 
+        self.tls_checkbox = QCheckBox("Use TLS")
+        form_layout.addRow(self.tls_checkbox)
+
         layout.addLayout(form_layout)
 
         button_layout = QHBoxLayout()
@@ -100,8 +104,9 @@ class ConnectDialog(QDialog):
             host = self.host_input.text().strip()
             port = int(self.port_input.text().strip())
             alias = self.alias_input.text().strip() or "Anonymous"
+            tls = self.tls_checkbox.isChecked()
 
-            self.connect_requested.emit(host, port, alias)
+            self.connect_requested.emit(host, port, alias, tls)
             self.accept()
         except ValueError:
             pass

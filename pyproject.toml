@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "netcomm"
+description = "Network communication application over TCP"
+license = "MIT"
+version = "0.0.1"
+authors = [
+  { name="David Zhao", email="davidz101502@gmail.com"}
+]
+requires-python = ">=3.8"
+readme = "README.md"
+
+[project.optional-dependencies]
+gui = ["PyQt5", "qasync"]
+cli = ["prompt_toolkit"]
+
+[project.scripts]
+netcomm-server = "networking.server:main"
+netcomm-cli = "cli.main:main"
+
+[project.gui-scripts]
+netcomm-gui = "gui.main:main"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src"]
+sources = ["src"]
