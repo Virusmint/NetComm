@@ -10,13 +10,15 @@ from .protocol.io import read_message, ConnectionCloseError
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
+# TODO: Max message length
 MAX_MESSAGE_LENGTH = 1024  # Maximum length of a message in bytes
 
 
 class Server:
-    def __init__(self, host="0.0.0.0", port=50000):
+    def __init__(self, host="0.0.0.0", port=50000, tls=False):
         self.host = host
         self.port = port
+        self.tls = tls
         self.server = None
         self.clients = set()
 
@@ -61,8 +63,10 @@ class Server:
             await self.broadcast(f"[-] {alias} has left the chat.")
 
     async def start(self):
-        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        ssl_context.load_cert_chain("server.crt", "server.key")
+        ssl_context = None
+        if self.tls:
+            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_context.load_cert_chain("ssl/server.crt", "ssl/server.key")
 
         self.server = await asyncio.start_server(
             self.handle_client,
@@ -70,7 +74,7 @@ class Server:
             self.port,
             ssl=ssl_context,
         )
-        logger.info(f"TLS Server started on {self.host}:{self.port}.")
+        logger.info(f"Server started on {self.host}:{self.port}.")
         async with self.server:
             await self.server.serve_forever()
 
@@ -82,23 +86,22 @@ class Server:
             await self.server.wait_closed()
         logger.info("Server stopped gracefully.")
 
+    async def run(self):
+        try:
+            await self.start()
+        except asyncio.CancelledError:
+            await self.stop()
 
-async def main_coro():
-    try:
-        await server.start()
-    except asyncio.CancelledError:
-        await server.stop()
 
-
-if __name__ == "__main__":
+def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Async TCP Server")
     parser.add_argument(
         "--host",
         type=str,
-        default="127.0.0.1",
-        help="Host address to bind the server (default: 127.0.0.1)",
+        default="0.0.0.0",
+        help="Host address to bind the server (default: 0.0.0.0)",
     )
     parser.add_argument(
         "--port",
@@ -106,16 +109,21 @@ if __name__ == "__main__":
         default=50000,
         help="Port to bind the server (default: 50000)",
     )
+    parser.add_argument("--tls", action="store_true", help="Enable TLS")
     args = parser.parse_args()
-    server = Server(host=args.host, port=args.port)
+    server = Server(host=args.host, port=args.port, tls=args.tls)
 
     # https://stackoverflow.com/questions/48562893/how-to-gracefully-terminate-an-asyncio-script-with-ctrl-c
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    main_task = asyncio.ensure_future(main_coro())
+    main_task = asyncio.ensure_future(server.run())
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, main_task.cancel)
     try:
         loop.run_until_complete(main_task)
     finally:
         loop.close()
+
+
+if __name__ == "__main__":
+    main()
