@@ -1,17 +1,13 @@
 import asyncio
 import logging
-import struct
 import signal
 import ssl
 
 from typing import List
-from .protocol.io import read_message, ConnectionCloseError
+from .protocol.io import write_message, read_message
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
-
-# TODO: Max message length
-MAX_MESSAGE_LENGTH = 1024  # Maximum length of a message in bytes
 
 
 class Server:
@@ -20,21 +16,24 @@ class Server:
         self.port = port
         self.tls = tls
         self.server = None
-        self.clients = set()
+        self.writers = set()
+
+    async def close_writer(self, writer: asyncio.StreamWriter):
+        self.writers.discard(writer)
+        writer.close()
+        await writer.wait_closed()
 
     async def broadcast(self, message: str, exclude: List[asyncio.StreamWriter] = []):
         message = message.encode()
-        for writer in self.clients:
-            if writer not in exclude:
-                try:
-                    writer.write(struct.pack("!I", len(message)))  # Send length first
-                    writer.write(message)
-                    await writer.drain()
-                except Exception as e:
-                    logger.error(
-                        f"Error broadcasting to {writer.get_extra_info('peername')}: {e}"
-                    )
-                    self.clients.discard(writer)
+        writers = self.writers.difference(exclude)
+        for writer in writers:
+            try:
+                await write_message(writer, message)
+            except ConnectionError as e:
+                logger.error(
+                    f"Error broadcasting to {writer.get_extra_info('peername')}: {e}"
+                )
+                await self.close_writer(writer)
 
     async def handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -42,7 +41,7 @@ class Server:
         client_addr = writer.get_extra_info("peername")
         handshake = await read_message(reader)
         alias = handshake.split(":", 1)[-1].strip()
-        self.clients.add(writer)
+        self.writers.add(writer)
         logger.info(f"[+] New connection: {client_addr} as '{alias}'.")
         await self.broadcast(f"[+] {alias} has joined the chat!", exclude=[writer])
         try:
@@ -52,13 +51,9 @@ class Server:
                     f"Received message from {alias}, {client_addr}: {message}."
                 )
                 await self.broadcast(f"{alias}: {message}", exclude=[writer])
-        # TODO: Better error handling and reconnection logic
-        except (asyncio.IncompleteReadError, ConnectionCloseError):
-            pass
+        # TODO: Error handling for client disconnection
         finally:
-            self.clients.discard(writer)
-            writer.close()
-            await writer.wait_closed()
+            await self.close_writer(writer)
             logger.info(f"[-] Closed connection: {client_addr} as {alias}.")
             await self.broadcast(f"[-] {alias} has left the chat.")
 
@@ -67,7 +62,6 @@ class Server:
         if self.tls:
             ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
             ssl_context.load_cert_chain("ssl/server.crt", "ssl/server.key")
-
         self.server = await asyncio.start_server(
             self.handle_client,
             self.host,

@@ -27,7 +27,7 @@ class ClientCLI:
                         self.stop_event.set()
                         break
                     await self.client.send_message(message)
-        except (EOFError, KeyboardInterrupt):
+        except (EOFError, KeyboardInterrupt, ConnectionError):
             self.stop_event.set()
         except asyncio.CancelledError:
             raise
