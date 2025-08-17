@@ -1,12 +1,10 @@
 import sys
-import os
 import asyncio
 import logging
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtCore import QObject, pyqtSignal, QThread, QTimer
+from PyQt5.QtCore import QObject, pyqtSignal, QTimer
 import qasync
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 from networking.client import Client
 from .widgets.chat_window import ChatWindow
 from .widgets.connect_dialog import ConnectDialog
@@ -56,7 +54,6 @@ class ChatApplication(QObject):
             await self.client.connect()
             self.connection_status.emit(True)
             self.chat_window.add_message(f"Connected to {host}:{port} as {alias}")
-            # Start listening for messages
             asyncio.create_task(self.listen_for_messages())
         except Exception as e:
             logger.error(f"Connection error: {e}")
@@ -82,14 +79,11 @@ class ChatApplication(QObject):
                 self.show_connect_dialog()
 
     def handle_window_close(self):
-        # Handle window close without showing reconnect dialog
         if self.client and self.client.writer:
             self.client.writer.close()
-        # Exit the application
         QApplication.quit()
 
     async def listen_for_messages(self):
-        """Continuously listen for incoming messages"""
         try:
             while self.client and self.client.reader:
                 await self.client.receive_message()
@@ -99,7 +93,8 @@ class ChatApplication(QObject):
             self.chat_window.add_message("Connection lost")
 
 
-if __name__ == "__main__":
+def main():
+    # FIX: Add TLS support
     app = QApplication(sys.argv)
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
@@ -115,7 +110,9 @@ if __name__ == "__main__":
     try:
         with loop:
             loop.run_forever()
-    except KeyboardInterrupt:
-        pass
     finally:
         cleanup()
+
+
+if __name__ == "__main__":
+    main()

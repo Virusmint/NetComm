@@ -181,6 +181,5 @@ class ChatWindow(QWidget):
             self.disconnect_button.setEnabled(False)
 
     def closeEvent(self, event):
-        # Signal window is closing to handle cleanup without showing dialog
         self.window_closing.emit()
         event.accept()

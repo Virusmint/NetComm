@@ -4,13 +4,13 @@ import argparse
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.shortcuts import PromptSession
 
-from ...networking.client import Client
+from networking.client import Client
 
 
 class ClientCLI:
     def __init__(self, client: Client):
         self.client = client
-        self.pending_tasks = None
+        self.pending_tasks = []
         self.stop_event = asyncio.Event()
         self.client.set_message_callback(self._message_callback)
 
@@ -19,27 +19,29 @@ class ClientCLI:
 
     async def send_loop(self):
         session = PromptSession()
-        with patch_stdout():
-            while True:
-                try:
+        try:
+            with patch_stdout():
+                while True:
                     message = await session.prompt_async("> ")
                     if message.lower() in ("exit", "quit"):
-                        await self.stop()
+                        self.stop_event.set()
                         break
                     await self.client.send_message(message)
-                except (EOFError, KeyboardInterrupt):
-                    self.stop_event.set()
-                    break
+        except (EOFError, KeyboardInterrupt):
+            self.stop_event.set()
+        except asyncio.CancelledError:
+            raise
 
     async def receive_loop(self):
-        while True:
-            try:
+        try:
+            while True:
                 message = await self.client.receive_message()
                 if message is None:
                     break
-            except (asyncio.CancelledError, ConnectionError):
-                self.stop_event.set()
-                break
+        except ConnectionError:
+            self.stop_event.set()
+        except asyncio.CancelledError:
+            raise
 
     async def start(self):
         try:
@@ -50,21 +52,17 @@ class ClientCLI:
         except ConnectionError as e:
             print(f"Connection error: {e}")
             return
-        self.stop_event.clear()
-        _, self.pending_tasks = await asyncio.wait(
-            [
-                asyncio.create_task(self.receive_loop()),
-                asyncio.create_task(self.send_loop()),
-                asyncio.create_task(self.stop_event.wait()),
-            ],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        recv_task = asyncio.create_task(self.receive_loop())
+        send_task = asyncio.create_task(self.send_loop())
+        self.pending_tasks = [recv_task, send_task]
+        await self.stop_event.wait()
         await self.stop()
 
     async def stop(self):
-        if self.pending_tasks:
-            for task in self.pending_tasks:
-                task.cancel()
+        self.stop_event.clear()
+        for task in self.pending_tasks:
+            task.cancel()
+        self.pending_tasks.clear()
         if self.client.writer:
             self.client.writer.close()
             await self.client.writer.wait_closed()
@@ -91,9 +89,10 @@ def main():
         default="Anonymous",
         help="Client alias (default: Anonymous)",
     )
+    parser.add_argument("--tls", action="store_true", help="Enable TLS")
 
     args = parser.parse_args()
-    client = Client(host=args.host, port=args.port, alias=args.alias)
+    client = Client(host=args.host, port=args.port, alias=args.alias, tls=args.tls)
     cli = ClientCLI(client)
     asyncio.run(cli.start())
 
