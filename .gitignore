@@ -1,1 +1,12 @@
 __pycache__
+.DS_Store
+venv
+*.crt
+*.pem
+*.key
+ssl/
+
+# Python packaging
+*.egg-info/
+build/
+dist/
